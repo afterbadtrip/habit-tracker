@@ -1,280 +1,1197 @@
 <!DOCTYPE html>
-<html lang="ru" class="dark">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#09090b">
-  <title>HabitFlow Mobile</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <title>HabitFlow — Трекер привычек</title>
   <style>
-    /* Убрали жесткие ограничения, которые могли ломать клики */
-    * { -webkit-tap-highlight-color: transparent; }
-    body {
-      background-color: #09090b;
-      color: #f4f4f5;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      padding-top: max(16px, env(safe-area-inset-top));
-      padding-bottom: calc(90px + env(safe-area-inset-bottom));
+    :root {
+      --bg: #09090b;
+      --card: #18181b;
+      --card-hover: #222227;
+      --border: #27272a;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --subtle: #71717a;
+      --emerald: #10b981;
+      --emerald-dark: #059669;
+      --emerald-bg: rgba(16, 185, 129, 0.14);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.14);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.15);
     }
-    .card { background: #18181b; border: 1px solid #27272a; border-radius: 20px; }
-    .active-scale:active { transform: scale(0.97); transition: transform 0.05s; }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      line-height: 1.4;
+      overflow-x: hidden;
+    }
+
+    button, input {
+      font-family: inherit;
+      color: inherit;
+      border: none;
+      outline: none;
+      background: none;
+      touch-action: manipulation;
+    }
+
+    button {
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .app-container {
+      max-width: 460px;
+      margin: 0 auto;
+      padding: 16px 16px 105px 16px;
+      padding-top: max(16px, env(safe-area-inset-top));
+    }
+
+    /* Шапка */
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .brand-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #34d399, #22d3ee);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-date {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .btn-today {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--emerald);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 14px;
+      border-radius: 12px;
+      transition: transform 0.1s ease, background 0.15s ease;
+    }
+
+    .btn-today:active {
+      transform: scale(0.95);
+      background: var(--card-hover);
+    }
+
+    /* Карусель дней недели */
+    .days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      margin-bottom: 18px;
+    }
+
+    .day-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 4px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      transition: all 0.15s ease;
+    }
+
+    .day-btn:active {
+      transform: scale(0.94);
+    }
+
+    .day-btn.active {
+      background: var(--emerald);
+      border-color: #34d399;
+      color: #052e16;
+      font-weight: 700;
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.25);
+    }
+
+    .day-name {
+      font-size: 11px;
+      opacity: 0.85;
+    }
+
+    .day-count {
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 4px;
+      width: 26px;
+      height: 22px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .day-btn:not(.active) .day-count.completed {
+      background: var(--emerald-bg);
+      color: var(--emerald);
+    }
+
+    .day-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      margin-top: 4px;
+      background: transparent;
+    }
+
+    .day-dot.is-today {
+      background: var(--emerald);
+    }
+
+    .day-btn.active .day-dot.is-today {
+      background: #052e16;
+    }
+
+    /* Карточки */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    /* Прогресс дня */
+    .progress-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: linear-gradient(145deg, #18181b 0%, #121215 100%);
+    }
+
+    .ring-wrap {
+      position: relative;
+      width: 64px;
+      height: 64px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ring-svg {
+      width: 64px;
+      height: 64px;
+      transform: rotate(-90deg);
+    }
+
+    .ring-bg {
+      fill: none;
+      stroke: #27272a;
+      stroke-width: 4;
+    }
+
+    .ring-bar {
+      fill: none;
+      stroke: var(--emerald);
+      stroke-width: 4;
+      stroke-linecap: round;
+      transition: stroke-dasharray 0.35s ease;
+    }
+
+    .ring-label {
+      position: absolute;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .progress-info h2 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .progress-info p {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Заголовки секций */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 18px 4px 10px 4px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #d4d4d8;
+    }
+
+    .section-badge {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    /* Список привычек */
+    .habits-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .habit-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-align: left;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 13px 14px;
+      transition: transform 0.1s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .habit-item:active {
+      transform: scale(0.98);
+    }
+
+    .habit-item.done {
+      border-color: rgba(16, 185, 129, 0.45);
+      background: rgba(16, 185, 129, 0.06);
+    }
+
+    .habit-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      flex: 1;
+      pointer-events: none;
+    }
+
+    .habit-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: #232329;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .habit-text-wrap {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .habit-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .habit-item.done .habit-name {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+
+    .habit-streak {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--amber);
+      margin-top: 2px;
+    }
+
+    .habit-check {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      border: 2px solid #3f3f46;
+      background: #121215;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 800;
+      color: transparent;
+      flex-shrink: 0;
+      margin-left: 12px;
+      pointer-events: none;
+      transition: all 0.15s ease;
+    }
+
+    .habit-item.done .habit-check {
+      background: var(--emerald);
+      border-color: #34d399;
+      color: #052e16;
+    }
+
+    /* Формы и инпуты */
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .text-input {
+      flex: 1;
+      background: #121215;
+      border: 1px solid #3f3f46;
+      border-radius: 12px;
+      padding: 11px 13px;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .text-input:focus {
+      border-color: var(--emerald);
+    }
+
+    .emoji-input {
+      width: 48px;
+      text-align: center;
+      background: #121215;
+      border: 1px solid #3f3f46;
+      border-radius: 12px;
+      font-size: 18px;
+      padding: 8px 4px;
+    }
+
+    .btn-primary {
+      background: var(--emerald);
+      color: #052e16;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 0 16px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-primary:active {
+      background: var(--emerald-dark);
+      transform: scale(0.96);
+    }
+
+    .btn-block {
+      width: 100%;
+      padding: 13px 16px;
+    }
+
+    /* Быстрые цели */
+    .goals-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .goal-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #121215;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      gap: 10px;
+    }
+
+    .goal-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      text-align: left;
+    }
+
+    .goal-box {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      border: 2px solid #52525b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+      pointer-events: none;
+    }
+
+    .goal-row.done .goal-box {
+      background: var(--emerald);
+      border-color: var(--emerald);
+      color: #052e16;
+    }
+
+    .goal-text {
+      font-size: 13px;
+      color: var(--text);
+      pointer-events: none;
+    }
+
+    .goal-row.done .goal-text {
+      text-decoration: line-through;
+      color: var(--subtle);
+    }
+
+    .goal-del {
+      color: var(--subtle);
+      font-size: 15px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+
+    .goal-del:active {
+      background: var(--danger-bg);
+      color: var(--danger);
+    }
+
+    /* Аналитика */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .kpi-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 14px;
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .kpi-value {
+      font-size: 24px;
+      font-weight: 800;
+      margin-top: 4px;
+    }
+
+    .bar-chart {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      height: 150px;
+      align-items: end;
+      padding-top: 16px;
+    }
+
+    .bar-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .bar-pct {
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 96px;
+      background: #232329;
+      border-radius: 8px;
+      display: flex;
+      align-items: flex-end;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      width: 100%;
+      background: var(--emerald);
+      border-radius: 8px;
+      transition: height 0.3s ease;
+    }
+
+    .bar-day {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .streak-row {
+      margin-bottom: 12px;
+    }
+
+    .streak-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .streak-row-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .streak-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: #27272a;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .streak-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #34d399);
+      border-radius: 99px;
+      transition: width 0.3s ease;
+    }
+
+    /* Управление привычками */
+    .manage-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #121215;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+
+    .btn-delete {
+      background: var(--danger-bg);
+      color: #f87171;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 8px;
+    }
+
+    .btn-reset {
+      width: 100%;
+      padding: 14px;
+      border-radius: 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: #f87171;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    /* Нижняя навигация */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(9, 9, 11, 0.94);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      padding: 8px 16px calc(12px + env(safe-area-inset-bottom)) 16px;
+      z-index: 100;
+    }
+
+    .bottom-nav-inner {
+      max-width: 460px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .nav-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      padding: 6px 0;
+      border-radius: 12px;
+      color: var(--subtle);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .nav-btn .nav-icon {
+      font-size: 19px;
+      pointer-events: none;
+    }
+
+    .nav-btn span {
+      pointer-events: none;
+    }
+
+    .nav-btn.active {
+      color: var(--emerald);
+      background: rgba(16, 185, 129, 0.08);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .toast {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-80px);
+      background: #10b981;
+      color: #052e16;
+      font-weight: 800;
+      font-size: 13px;
+      padding: 10px 18px;
+      border-radius: 99px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      transition: transform 0.25s ease;
+      z-index: 200;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
   </style>
 </head>
-<body class="max-w-md mx-auto min-h-screen px-4">
+<body>
+  <div id="toastBanner" class="toast">Сохранено!</div>
 
-  <!-- Шапка -->
-  <header class="flex items-center justify-between mb-4">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">HabitFlow</h1>
-      <p id="currentDateText" class="text-xs text-zinc-400">Отслеживание дисциплины</p>
-    </div>
-    <button onclick="goToday()" class="px-3 py-2 text-xs font-semibold bg-zinc-800 text-emerald-400 rounded-xl border border-zinc-700 active-scale">
-      Сегодня
-    </button>
-  </header>
+  <div class="app-container">
+    <!-- Шапка -->
+    <header class="app-header">
+      <div>
+        <div class="brand-title">HabitFlow</div>
+        <div id="currentDateText" class="brand-date">Загрузка...</div>
+      </div>
+      <button type="button" id="btnGoToday" class="btn-today">Сегодня</button>
+    </header>
 
-  <!-- Календарь -->
-  <div id="daysCarousel" class="grid grid-cols-7 gap-1.5 mb-5"></div>
+    <!-- Дни недели -->
+    <div id="daysCarousel" class="days-grid"></div>
 
-  <!-- Вкладка: СЕГОДНЯ -->
-  <main id="tab-today" class="space-y-4">
-    <!-- Прогресс дня -->
-    <div class="card p-4 flex items-center justify-between bg-gradient-to-br from-zinc-900 to-zinc-950">
-      <div class="flex items-center gap-4">
-        <div class="relative w-16 h-16 flex items-center justify-center">
-          <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
-            <path class="text-zinc-800" stroke-width="3.8" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-            <path id="progressRing" class="text-emerald-400 transition-all duration-300" stroke-dasharray="0, 100" stroke-width="3.8" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+    <!-- ВКЛАДКА 1: СЕГОДНЯ -->
+    <main id="view-today">
+      <div class="card progress-card">
+        <div class="ring-wrap">
+          <svg class="ring-svg" viewBox="0 0 36 36">
+            <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+            <path id="progressRing" class="ring-bar" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
           </svg>
-          <span id="progressText" class="absolute text-sm font-bold">0%</span>
+          <span id="progressText" class="ring-label">0%</span>
         </div>
-        <div>
-          <h2 id="motivationTitle" class="font-bold text-base">Включайся в режим!</h2>
-          <p id="motivationSub" class="text-xs text-zinc-400 mt-0.5">Отметь сегодняшние привычки</p>
+        <div class="progress-info">
+          <h2 id="motivationTitle">Включайся в режим!</h2>
+          <p id="motivationSub">Нажми на привычку, чтобы отметить выполнение</p>
         </div>
       </div>
-    </div>
 
-    <!-- Список привычек -->
-    <div>
-      <div class="flex items-center justify-between mb-2 px-1">
-        <h3 class="text-sm font-semibold text-zinc-300">Привычки на день</h3>
-        <span id="completedCount" class="text-xs text-zinc-500 font-medium">0/0</span>
+      <div class="section-header">
+        <span id="dayHabitsHeading" class="section-title">Привычки на день</span>
+        <span id="completedCount" class="section-badge">0 из 0</span>
       </div>
-      <div id="habitsList" class="space-y-2.5"></div>
-    </div>
 
-    <!-- Быстрые цели -->
-    <div class="card p-4 mt-4">
-      <h3 class="text-sm font-semibold text-zinc-300 mb-3">Быстрые цели на сегодня</h3>
-      <form onsubmit="event.preventDefault(); addGoal();" class="flex gap-2 mb-3">
-        <input id="goalInput" type="text" placeholder="Добавить задачу..." class="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500">
-        <button type="submit" class="bg-emerald-500 text-zinc-950 font-bold px-4 rounded-xl active-scale">+</button>
-      </form>
-      <div id="goalsList" class="space-y-2"></div>
-    </div>
-  </main>
+      <div id="habitsList" class="habits-list"></div>
 
-  <!-- Вкладка: АНАЛИТИКА -->
-  <section id="tab-stats" class="hidden space-y-4">
-    <div class="grid grid-cols-2 gap-3">
-      <div class="card p-4">
-        <span class="text-xs text-zinc-400">Лучший стрик</span>
-        <div id="bestStreakStat" class="text-2xl font-bold text-amber-400 mt-1">🔥 0 дн.</div>
+      <!-- Быстрое добавление привычки прямо с главного экрана -->
+      <div class="card" style="margin-top: 12px; border-style: dashed; border-color: #3f3f46; background: rgba(24, 24, 27, 0.5);">
+        <form id="quickHabitForm" class="input-row" style="margin-bottom: 0;">
+          <input id="quickHabitEmoji" type="text" class="emoji-input" value="🔥" maxlength="2" title="Иконка">
+          <input id="quickHabitName" type="text" class="text-input" placeholder="Новая регулярная привычка..." autocomplete="off">
+          <button type="submit" class="btn-primary">+</button>
+        </form>
       </div>
-      <div class="card p-4">
-        <span class="text-xs text-zinc-400">Выполнено</span>
-        <div id="weeklyRateStat" class="text-2xl font-bold text-emerald-400 mt-1">0%</div>
+
+      <div class="section-header" style="margin-top: 22px;">
+        <span class="section-title">Быстрые цели на день</span>
       </div>
-    </div>
 
-    <div class="card p-4">
-      <h3 class="text-sm font-semibold text-zinc-300 mb-4 font-bold">Статистика за неделю</h3>
-      <div id="weeklyBarChart" class="grid grid-cols-7 gap-2 items-end h-36 pt-4 px-1"></div>
-    </div>
+      <div class="card">
+        <form id="goalForm" class="input-row">
+          <input id="goalInput" type="text" class="text-input" placeholder="Новая задача на сегодня..." autocomplete="off">
+          <button type="submit" class="btn-primary">+</button>
+        </form>
+        <div id="goalsList" class="goals-list"></div>
+      </div>
+    </main>
 
-    <div class="card p-4">
-      <h3 class="text-sm font-semibold text-zinc-300 mb-3">Показатели</h3>
-      <div id="streaksBreakdown" class="space-y-3"></div>
-    </div>
-  </section>
-
-  <!-- Вкладка: НАСТРОЙКИ -->
-  <section id="tab-settings" class="hidden space-y-4">
-    <div class="card p-4">
-      <h3 class="text-sm font-semibold text-zinc-300 mb-3">Добавить новую привычку</h3>
-      <form onsubmit="event.preventDefault(); addHabit();" class="space-y-3">
-        <div class="flex gap-2">
-          <input id="habitEmoji" type="text" value="⚡" class="w-12 text-center bg-zinc-900 border border-zinc-700 rounded-xl py-3 text-base">
-          <input id="habitName" type="text" placeholder="Название привычки..." class="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-3 text-sm focus:outline-none focus:border-emerald-500">
+    <!-- ВКЛАДКА 2: АНАЛИТИКА -->
+    <section id="view-stats" class="hidden">
+      <div class="kpi-grid">
+        <div class="kpi-box">
+          <div class="kpi-label">Лучшая серия</div>
+          <div id="bestStreakStat" class="kpi-value" style="color: var(--amber);">🔥 0 дн.</div>
         </div>
-        <button type="submit" class="w-full bg-emerald-500 text-zinc-950 font-bold py-3 rounded-xl active-scale">Добавить</button>
-      </form>
-    </div>
+        <div class="kpi-box">
+          <div class="kpi-label">За неделю</div>
+          <div id="weeklyRateStat" class="kpi-value" style="color: var(--emerald);">0%</div>
+        </div>
+      </div>
 
-    <div class="card p-4">
-      <h3 class="text-sm font-semibold text-zinc-300 mb-3">Управление привычками</h3>
-      <div id="manageHabitsList" class="space-y-2"></div>
-    </div>
+      <div class="card">
+        <div class="section-title" style="margin-bottom: 8px;">График выполнения по дням</div>
+        <div id="weeklyBarChart" class="bar-chart"></div>
+      </div>
 
-    <button onclick="resetDemo()" class="w-full py-3.5 text-xs font-bold text-red-400 bg-zinc-900/50 border border-zinc-800 rounded-2xl active-scale">
-      Сбросить всё к демо-данным
-    </button>
-  </section>
+      <div class="card">
+        <div class="section-title" style="margin-bottom: 14px;">Серии достижений за неделю</div>
+        <div id="streaksBreakdown"></div>
+      </div>
+    </section>
+
+    <!-- ВКЛАДКА 3: НАСТРОЙКИ -->
+    <section id="view-settings" class="hidden">
+      <div class="card">
+        <div class="section-title" style="margin-bottom: 12px;">Добавить привычку</div>
+        <form id="habitForm">
+          <div class="input-row">
+            <input id="habitEmoji" type="text" class="emoji-input" value="⚡" maxlength="2">
+            <input id="habitName" type="text" class="text-input" placeholder="Название привычки..." autocomplete="off">
+          </div>
+          <button type="submit" class="btn-primary btn-block">Добавить в список</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="section-title" style="margin-bottom: 12px;">Мои привычки</div>
+        <div id="manageHabitsList"></div>
+      </div>
+
+      <button type="button" id="btnResetDemo" class="btn-reset">
+        Очистить все данные
+      </button>
+    </section>
+  </div>
 
   <!-- Нижний Таббар -->
-  <nav class="fixed bottom-0 left-0 right-0 bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800 px-6 py-2 pb-5 z-50">
-    <div class="max-w-md mx-auto flex justify-around items-center">
-      <button onclick="switchTab('today')" id="nav-today" class="flex flex-col items-center gap-1 text-emerald-400 py-1.5 px-3 active-scale">
-        <span class="text-xl">☑️</span>
-        <span class="text-[11px] font-medium">Сегодня</span>
+  <nav class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button type="button" class="nav-btn active" data-tab="today">
+        <span class="nav-icon">☑️</span>
+        <span>Сегодня</span>
       </button>
-      <button onclick="switchTab('stats')" id="nav-stats" class="flex flex-col items-center gap-1 text-zinc-500 py-1.5 px-3 active-scale">
-        <span class="text-xl">📊</span>
-        <span class="text-[11px] font-medium">Аналитика</span>
+      <button type="button" class="nav-btn" data-tab="stats">
+        <span class="nav-icon">📊</span>
+        <span>Аналитика</span>
       </button>
-      <button onclick="switchTab('settings')" id="nav-settings" class="flex flex-col items-center gap-1 text-zinc-500 py-1.5 px-3 active-scale">
-        <span class="text-xl">⚙️</span>
-        <span class="text-[11px] font-medium">Настройки</span>
+      <button type="button" class="nav-btn" data-tab="settings">
+        <span class="nav-icon">⚙️</span>
+        <span>Настройки</span>
       </button>
     </div>
   </nav>
 
   <script>
-    const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-    const todayIndex = (new Date().getDay() + 6) % 7;
-    let selectedDay = todayIndex;
+    (function() {
+      const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+      const STORAGE_KEY = 'habitflow_clean_v1';
+      const todayIndex = (new Date().getDay() + 6) % 7;
+      let selectedDay = todayIndex;
 
-    const DEFAULT_DATA = {
-      habits: [
-        { id: 1, name: 'Силовая тренировка', icon: '🏋️', days: [true, false, true, false, true, false, false] },
-        { id: 2, name: 'Аим-тренер 30 мин', icon: '🎯', days: [true, true, true, true, false, false, false] },
-        { id: 3, name: 'Практика английского', icon: '🇬🇧', days: [true, true, false, true, true, false, false] },
-        { id: 4, name: 'Лаба по ИБ / Linux', icon: '💻', days: [false, true, true, true, false, false, false] },
-        { id: 5, name: 'Чтение 20 страниц', icon: '📖', days: [true, true, true, false, false, false, false] }
-      ],
-      goals: [
-        { id: 101, text: 'Разобрать конспект по сетям', done: false },
-        { id: 102, text: 'Закрыть норму по белку', done: true }
-      ]
-    };
-
-    let state = JSON.parse(localStorage.getItem('habitflow_mobile_v3')) || DEFAULT_DATA;
-
-    function save() {
-      localStorage.setItem('habitflow_mobile_v3', JSON.stringify(state));
-      renderAll();
-    }
-
-    function vibrate(ms = 15) {
-      if (navigator.vibrate) navigator.vibrate(ms);
-    }
-
-    function calcStreak(daysArr) {
-      let current = 0;
-      for (let i = todayIndex; i >= 0; i--) {
-        if (daysArr[i]) current++;
-        else break;
+      function getDefaultData() {
+        return {
+          habits: [],
+          goals: []
+        };
       }
-      return current;
-    }
 
-    function renderDays() {
-      const container = document.getElementById('daysCarousel');
-      container.innerHTML = DAYS.map((d, idx) => {
-        const isSelected = idx === selectedDay;
-        const isToday = idx === todayIndex;
+      let state = loadState();
+
+      function loadState() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed && Array.isArray(parsed.habits) && Array.isArray(parsed.goals)) {
+              return parsed;
+            }
+          }
+        } catch (err) {
+          // Игнорируем ошибки доступа к хранилищу во фрейме
+        }
+        return getDefaultData();
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (err) {
+          // Работаем в оперативной памяти, если хранилище заблокировано
+        }
+      }
+
+      function showToast(text) {
+        const el = document.getElementById('toastBanner');
+        if (!el) return;
+        el.textContent = text;
+        el.classList.add('show');
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => el.classList.remove('show'), 1600);
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function calcCurrentStreak(daysArr) {
+        let count = 0;
+        for (let i = selectedDay; i >= 0; i--) {
+          if (daysArr[i]) count++;
+          else break;
+        }
+        return count;
+      }
+
+      function renderDays() {
+        const container = document.getElementById('daysCarousel');
         const total = state.habits.length;
-        const done = state.habits.filter(h => h.days[idx]).length;
-        const allDone = total > 0 && done === total;
 
-        return `
-          <button type="button" onclick="selectDay(${idx})" class="flex flex-col items-center py-2.5 rounded-2xl border transition-all active-scale ${
-            isSelected
-              ? 'bg-emerald-500 text-zinc-950 border-emerald-400 font-bold shadow-lg shadow-emerald-500/20'
-              : 'bg-zinc-900/90 text-zinc-300 border-zinc-800'
-          }">
-            <span class="text-[11px] opacity-80">${d}</span>
-            <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] mt-1 ${
-              allDone && !isSelected ? 'bg-emerald-500/20 text-emerald-400 font-bold' : ''
-            }">
-              ${allDone ? '✓' : done + '/' + total}
-            </div>
-            ${isToday ? `<span class="w-1.5 h-1.5 rounded-full mt-1 ${isSelected ? 'bg-zinc-950' : 'bg-emerald-400'}"></span>` : '<span class="w-1.5 h-1.5 mt-1"></span>'}
-          </button>
-        `;
-      }).join('');
-    }
+        container.innerHTML = DAYS.map((dayName, idx) => {
+          const isSelected = idx === selectedDay;
+          const isToday = idx === todayIndex;
+          const done = state.habits.filter(h => h.days[idx]).length;
+          const allDone = total > 0 && done === total;
 
-    function renderHabits() {
-      const list = document.getElementById('habitsList');
-      const total = state.habits.length;
-      const doneCount = state.habits.filter(h => h.days[selectedDay]).length;
-      const percent = total ? Math.round((doneCount / total) * 100) : 0;
-
-      document.getElementById('completedCount').textContent = `${doneCount}/${total}`;
-      document.getElementById('progressRing').setAttribute('stroke-dasharray', `${percent}, 100`);
-      document.getElementById('progressText').textContent = `${percent}%`;
-
-      if (percent === 100 && total > 0) {
-        document.getElementById('motivationTitle').textContent = 'Всё сделано! 🔥';
-        document.getElementById('motivationSub').textContent = 'Ты закрыл этот день полностью!';
-      } else if (percent >= 50) {
-        document.getElementById('motivationTitle').textContent = 'Отличный темп! ⚡';
-        document.getElementById('motivationSub').textContent = `Осталось выполнить: ${total - doneCount}`;
-      } else {
-        document.getElementById('motivationTitle').textContent = `Планы на ${DAYS[selectedDay]}`;
-        document.getElementById('motivationSub').textContent = 'Дисциплина рождается в действии';
+          return `
+            <button type="button" class="day-btn ${isSelected ? 'active' : ''}" data-day="${idx}">
+              <span class="day-name" style="pointer-events:none">${dayName}</span>
+              <span class="day-count ${allDone ? 'completed' : ''}" style="pointer-events:none">
+                ${allDone ? '✓' : done + '/' + total}
+              </span>
+              <span class="day-dot ${isToday ? 'is-today' : ''}" style="pointer-events:none"></span>
+            </button>
+          `;
+        }).join('');
       }
 
-      list.innerHTML = state.habits.map(h => {
-        const isDone = h.days[selectedDay];
-        const streak = calcStreak(h.days);
-        return `
-          <div onclick="toggleHabit(${h.id})" class="card p-3.5 flex items-center justify-between cursor-pointer active-scale transition-all ${
-            isDone ? 'border-emerald-500/40 bg-emerald-950/10' : ''
-          }">
-            <div class="flex items-center gap-3">
-              <div class="w-11 h-11 rounded-2xl bg-zinc-800/80 flex items-center justify-center text-xl">
-                ${h.icon}
+      function renderHabits() {
+        const list = document.getElementById('habitsList');
+        const total = state.habits.length;
+        const doneCount = state.habits.filter(h => h.days[selectedDay]).length;
+        const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+
+        document.getElementById('dayHabitsHeading').textContent = `Привычки (${DAYS[selectedDay]})`;
+        document.getElementById('completedCount').textContent = `${doneCount} из ${total}`;
+        document.getElementById('progressRing').setAttribute('stroke-dasharray', `${pct}, 100`);
+        document.getElementById('progressText').textContent = `${pct}%`;
+
+        const titleEl = document.getElementById('motivationTitle');
+        const subEl = document.getElementById('motivationSub');
+
+        if (total === 0) {
+          titleEl.textContent = 'Начни свой челлендж! 🚀';
+          subEl.textContent = 'Добавь свои привычки в поле ниже';
+        } else if (pct === 100) {
+          titleEl.textContent = 'День закрыт на 100%! 🔥';
+          subEl.textContent = 'Железная дисциплина, все цели выполнены';
+        } else if (pct >= 50) {
+          titleEl.textContent = 'Отличный темп! ⚡';
+          subEl.textContent = `Осталось закрыть ещё ${total - doneCount}`;
+        } else {
+          titleEl.textContent = `Фокус на ${DAYS[selectedDay]}`;
+          subEl.textContent = 'Нажми на карточку привычки, чтобы отметить';
+        }
+
+        if (total === 0) {
+          list.innerHTML = `<div style="font-size:13px;color:var(--subtle);text-align:center;padding:18px 12px;border:1px solid var(--border);border-radius:16px;background:#121215;">Пока нет активных привычек. Создай первую прямо под этим блоком! 👇</div>`;
+          return;
+        }
+
+        list.innerHTML = state.habits.map(h => {
+          const isDone = Boolean(h.days[selectedDay]);
+          const streak = calcCurrentStreak(h.days);
+          return `
+            <button type="button" class="habit-item ${isDone ? 'done' : ''}" data-habit-id="${h.id}">
+              <div class="habit-left">
+                <div class="habit-icon">${escapeHtml(h.icon)}</div>
+                <div class="habit-text-wrap">
+                  <div class="habit-name">${escapeHtml(h.name)}</div>
+                  <div class="habit-streak">🔥 Серия: ${streak} дн.</div>
+                </div>
               </div>
-              <div class="text-left">
-                <div class="font-semibold text-sm ${isDone ? 'line-through text-zinc-500' : 'text-zinc-100'}">${h.name}</div>
-                <div class="text-[11px] text-amber-400 font-medium mt-0.5">🔥 Серия: ${streak} дн.</div>
+              <div class="habit-check">✓</div>
+            </button>
+          `;
+        }).join('');
+      }
+
+      function renderGoals() {
+        const list = document.getElementById('goalsList');
+        if (state.goals.length === 0) {
+          list.innerHTML = `<div style="font-size:12px;color:var(--subtle);text-align:center;padding:8px 0;">Нет дополнительных задач на сегодня</div>`;
+          return;
+        }
+
+        list.innerHTML = state.goals.map(g => `
+          <div class="goal-row ${g.done ? 'done' : ''}">
+            <button type="button" class="goal-toggle" data-goal-toggle="${g.id}">
+              <span class="goal-box">${g.done ? '✓' : ''}</span>
+              <span class="goal-text">${escapeHtml(g.text)}</span>
+            </button>
+            <button type="button" class="goal-del" data-goal-del="${g.id}">✕</button>
+          </div>
+        `).join('');
+      }
+
+      function renderStats() {
+        const totalPossible = state.habits.length * 7;
+        let totalDone = 0;
+        let bestStreak = 0;
+
+        state.habits.forEach(h => {
+          let cur = 0;
+          h.days.forEach(d => {
+            if (d) {
+              totalDone++;
+              cur++;
+              if (cur > bestStreak) bestStreak = cur;
+            } else {
+              cur = 0;
+            }
+          });
+        });
+
+        const weekPct = totalPossible > 0 ? Math.round((totalDone / totalPossible) * 100) : 0;
+        document.getElementById('bestStreakStat').textContent = `🔥 ${bestStreak} дн.`;
+        document.getElementById('weeklyRateStat').textContent = `${weekPct}%`;
+
+        const chart = document.getElementById('weeklyBarChart');
+        chart.innerHTML = DAYS.map((d, idx) => {
+          const done = state.habits.filter(h => h.days[idx]).length;
+          const pct = state.habits.length > 0 ? Math.round((done / state.habits.length) * 100) : 0;
+          return `
+            <div class="bar-col">
+              <span class="bar-pct">${pct}%</span>
+              <div class="bar-track">
+                <div class="bar-fill" style="height: ${Math.max(pct, 6)}%; opacity: ${idx === selectedDay ? '1' : '0.65'};"></div>
+              </div>
+              <span class="bar-day">${d}</span>
+            </div>
+          `;
+        }).join('');
+
+        const breakdown = document.getElementById('streaksBreakdown');
+        if (state.habits.length === 0) {
+          breakdown.innerHTML = `<div style="font-size:12px;color:var(--subtle);text-align:center;padding:8px 0;">Добавь привычки, чтобы видеть статистику</div>`;
+          return;
+        }
+        breakdown.innerHTML = state.habits.map(h => {
+          const count = h.days.filter(Boolean).length;
+          const pct = Math.round((count / 7) * 100);
+          return `
+            <div class="streak-row">
+              <div class="streak-row-top">
+                <span>${escapeHtml(h.icon)} ${escapeHtml(h.name)}</span>
+                <span style="color:var(--emerald);font-weight:700;">${count}/7 дн.</span>
+              </div>
+              <div class="streak-bar-bg">
+                <div class="streak-bar-fill" style="width:${pct}%;"></div>
               </div>
             </div>
-            <div class="w-8 h-8 rounded-xl flex items-center justify-center border-2 transition-all ${
-              isDone ? 'bg-emerald-500 border-emerald-400 text-zinc-950' : 'border-zinc-700 bg-zinc-900'
-            }">
-              ${isDone ? '<span class="font-bold text-sm">✓</span>' : ''}
-            </div>
+          `;
+        }).join('');
+      }
+
+      function renderManage() {
+        const list = document.getElementById('manageHabitsList');
+        if (state.habits.length === 0) {
+          list.innerHTML = `<div style="font-size:12px;color:var(--subtle);">Список пуст</div>`;
+          return;
+        }
+        list.innerHTML = state.habits.map(h => `
+          <div class="manage-item">
+            <span style="font-size:14px;font-weight:600;">${escapeHtml(h.icon)} ${escapeHtml(h.name)}</span>
+            <button type="button" class="btn-delete" data-habit-del="${h.id}">Удалить</button>
           </div>
-        `;
-      }).join('');
-    }
+        `).join('');
+      }
 
-    function renderGoals() {
-      const list = document.getElementById('goalsList');
-      list.innerHTML = state.goals.map(g => `
-        <div class="flex items-center justify-between bg-zinc-900/70 px-3.5 py-3 rounded-xl border border-zinc-800/80">
-          <div onclick="toggleGoal(${g.id})" class="flex items-center gap-3 flex-1 cursor-pointer">
-            <div class="w-5 h-5 rounded-md border flex items-center justify-center text-xs ${
-              g.done ? 'bg-emerald-500 border-emerald-400 text-zinc-950 font-bold' : 'border-zinc-600'
-            }">${g.done ? '✓' : ''}</div>
-            <span class="text-sm text-left ${g.done ? 'line-through text-zinc-500' : 'text-zinc-200'}">${g.text}</span>
-          </div>
-          <button type="button" onclick="deleteGoal(${g.id}); event.stopPropagation();" class="text-zinc-500 px-3 py-1 text-sm font-bold active-scale">✕</button>
-        </div>
-      `).join('');
-    }
+      function renderAll() {
+        renderDays();
+        renderHabits();
+        renderGoals();
+        renderStats();
+        renderManage();
+      }
 
-    function renderStats() {
-      const totalPossible = state.habits.length * 7;
-      let totalDone = 0;
-      let maxStreak = 0;
+      function switchTab(tabName) {
+        ['today', 'stats', 'settings'].forEach(t => {
+          const view = document.getElementById('view-' + t);
+          if (view) view.classList.toggle('hidden', t !== tabName);
+        });
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
+        });
+      }
 
-      state.habits.forEach(h => {
-        totalDone += h
+      // Единое делегирование кликов — работает безотказно на всех мобильных браузерах
+      document.addEventListener('click', function(e) {
+        const dayBtn = e.target.closest('[data-day]');
+        if (dayBtn) {
+          selectedDay = parseInt(dayBtn.getAttribute('data-day'), 10);
+          renderAll();
+          return;
+        }
+
+        const habitBtn = e.target.closest('[data-habit-id]');
+        if (habitBtn) {
+          const id = habitBtn.getAttribute('data-habit-id');
+          const habit = state.habits.find(h => h.id === id);
+          if (habit) {
+            habit.days[selectedDay] = !habit.days[selectedDay];
+            saveState();
+            renderAll();
+          }
+          return;
+        }
+
+        const goalToggle = e.target.closest('[data-goal-toggle]');
+        if (goalToggle) {
+          const id = goalToggle.getAttribute('data-goal-toggle');
+          const goal = state.goals.find(g => g.id === id);
+          if (goal) {
+            goal.done = !goal.done;
+            saveState();
+            renderGoals();
+          }
+          return;
+        }
+
+        const goalDel = e.target.closest('[data-goal-del]');
+        if (goalDel) {
+          const id = goalDel.getAttribute('data-goal-del');
+          state.goals = state.goals.filter(g => g.id !== id);
+          saveState();
+          renderGoals();
+          return;
+        }
+
+        const habitDel = e.target.closest('[data-habit-del]');
+        if (habitDel) {
+          const id = habitDel.getAttribute('data-habit-del');
+          state.habits = state.habits.filter(h => h.id !== id);
+          saveState();
+          renderAll();
+          showToast('Привычка удалена');
+          return;
+        }
+
+        const navBtn = e.target.closest('[data-tab]');
+        if (navBtn) {
+          switchTab(navBtn.getAttribute('data-tab'));
+          return;
+        }
+      });
+
+      document.getElementById('btnGoToday').addEventListener('click', function() {
+        selectedDay = todayIndex;
+        switchTab('today');
+        renderAll();
+        showToast('Переключено на сегодня');
+      });
+
+      document.getElementById('goalForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const input = document.getElementById('goalInput');
+        const text = input.value.trim();
+        if (!text) return;
+        state.goals.push({ id: 'g_' + Date.now(), text: text, done: false });
+        input.value = '';
+        saveState();
+        renderGoals();
+      });
+
+      document.getElementById('quickHabitForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const nameInput = document.getElementById('quickHabitName');
+        const emojiInput = document.getElementById('quickHabitEmoji');
+        const name = nameInput.value.trim();
+        if (!name) return;
+        state.habits.push({
+          id: 'h_' + Date.now(),
+          name: name,
+          icon: emojiInput.value.trim() || '🔥',
+          days: [false, false, false, false, false, false, false]
+        });
+        nameInput.value = '';
+        saveState();
+        renderAll();
+        showToast('Привычка добавлена!');
+      });
+
+      document.getElementById('habitForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const nameInput = document.getElementById('habitName');
+        const emojiInput = document.getElementById('habitEmoji');
+        const name = nameInput.value.trim();
+        if (!name) return;
+        state.habits.push({
+          id: 'h_' + Date.now(),
+          name: name,
+          icon: emojiInput.value.trim() || '⚡',
+          days: [false, false, false, false, false, false, false]
+        });
+        nameInput.value = '';
+        saveState();
+        renderAll();
+        switchTab('today');
+        showToast('Привычка добавлена!');
+      });
+
+      document.getElementById('btnResetDemo').addEventListener('click', function() {
+        state = getDefaultData();
+        saveState();
+        renderAll();
+        switchTab('today');
+        showToast('Все данные очищены');
+      });
+
+      // Инициализация даты и первичная отрисовка
+      const dateStr = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+      document.getElementById('currentDateText').textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+      renderAll();
+    })();
+  </script>
+</body>
+</html>
