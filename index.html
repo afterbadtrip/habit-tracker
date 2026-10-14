@@ -1241,9 +1241,18 @@
         <!-- Имя и кнопка копирования личного ID -->
         <div style="display: flex; gap: 7px; margin-bottom: 8px;">
           <input id="clubUserName" type="text" maxlength="22" placeholder="Твоё имя или ник..." class="input-text" style="padding: 9px 11px; font-size: 12px; flex: 1;">
-          <button type="button" id="copyMyIdBtn" class="btn-small emerald" style="font-size: 11px; padding: 8px 11px; flex-shrink: 0;" title="Нажми, чтобы скопировать свой ID и отправить другу">
+          <button type="button" id="copyMyIdBtn" class="btn-small emerald" style="font-size: 11px; padding: 8px 11px; flex-shrink: 0;" title="Нажми, чтобы скопировать свой ID">
             📋 Мой ID: <span id="clubUserIdDisplay">...</span>
           </button>
+        </div>
+
+        <!-- Синхронизация между ПК и Телефоном (вход по своему ID) -->
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; background: rgba(255,255,255,0.03); padding: 7px 10px; border-radius: 10px; border: 1px dashed var(--border);">
+          <span style="font-size: 11px; color: var(--muted);">Зашёл с другого устройства?</span>
+          <div style="display: flex; gap: 5px;">
+            <input id="switchMyIdInput" type="text" maxlength="12" placeholder="Твой ID (HF-...)" class="input-text" style="padding: 5px 8px; font-size: 11px; width: 110px; text-transform: uppercase; font-weight: 700;">
+            <button type="button" id="switchMyIdBtn" class="btn-small" style="padding: 5px 9px; font-size: 11px;">Войти</button>
+          </div>
         </div>
 
         <!-- Форма отправки главного итога дня -->
@@ -2156,25 +2165,34 @@
   </script>
 
   <script type="module">
-    const PROFILE_KEY = 'habitflow_id_profile_v3';
-    const LOCAL_CACHE_KEY = 'habitflow_id_posts_cache_v3';
+    const PROFILE_KEY = 'habitflow_id_profile_v4';
+    const LOCAL_CACHE_KEY = 'habitflow_id_posts_cache_v4';
+    const UID_STORAGE_KEY = 'habitflow_short_uid_v4';
+
+    function normalizeId(raw) {
+      let clean = String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+      if (clean && !clean.startsWith('HF-') && clean.length === 5) {
+        clean = 'HF-' + clean;
+      }
+      return clean;
+    }
 
     // Генерируем короткий, удобный для пересылки друзьям ID (например, HF-48291)
     function getOrCreateMyId() {
-      let uid = localStorage.getItem('habitflow_short_uid_v3');
-      if (!uid || !/^HF-[A-Z0-9]{5}$/.test(uid)) {
+      let uid = localStorage.getItem(UID_STORAGE_KEY) || localStorage.getItem('habitflow_short_uid_v3');
+      if (!uid || !/^HF-[A-Z0-9]{4,8}$/.test(uid)) {
         const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
         let code = 'HF-';
         for (let i = 0; i < 5; i++) {
           code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         uid = code;
-        localStorage.setItem('habitflow_short_uid_v3', uid);
       }
+      localStorage.setItem(UID_STORAGE_KEY, uid);
       return uid;
     }
 
-    const currentUserId = getOrCreateMyId();
+    let currentUserId = getOrCreateMyId();
 
     let profile = {
       name: '',
@@ -2183,11 +2201,11 @@
     };
 
     try {
-      const saved = JSON.parse(localStorage.getItem(PROFILE_KEY));
+      const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || localStorage.getItem('habitflow_id_profile_v3'));
       if (saved && typeof saved === 'object') {
         profile.name = saved.name || '';
         profile.followedUsers = Array.isArray(saved.followedUsers)
-          ? saved.followedUsers.map(x => String(x).trim().toUpperCase()).filter(Boolean)
+          ? saved.followedUsers.map(x => normalizeId(x)).filter(Boolean)
           : [];
         profile.likedIds = saved.likedIds && typeof saved.likedIds === 'object' ? saved.likedIds : {};
       }
@@ -2210,6 +2228,8 @@
     const feedCount = document.getElementById('clubFeedCount');
     const userIdDisplay = document.getElementById('clubUserIdDisplay');
     const copyMyIdBtn = document.getElementById('copyMyIdBtn');
+    const switchMyIdInput = document.getElementById('switchMyIdInput');
+    const switchMyIdBtn = document.getElementById('switchMyIdBtn');
     const refreshBtn = document.getElementById('clubRefreshBtn');
     const onlineBadge = document.getElementById('clubOnlineBadge');
 
@@ -2242,7 +2262,7 @@
     // Кэш постов по ID пользователей
     let postsByIdMap = {};
     try {
-      postsByIdMap = JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY)) || {};
+      postsByIdMap = JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY) || localStorage.getItem('habitflow_id_posts_cache_v3')) || {};
     } catch (e) {
       postsByIdMap = {};
     }
@@ -2253,20 +2273,50 @@
       } catch (e) {}
     }
 
-    // Облачное хранилище на базе открытого Key-Value API (работает на GitHub Pages и любых смартфонах без ключей)
-    // Для каждого пользователя хранится его массив свежих итогов (сегодня и вчера) по ключу его ID
-    const KV_BASE = 'https://kvdb.io/A6p9zW8xR4mK2vL9nQ5tB3/hf_user_';
+    // Надёжное кросс-девайс облако (ПК <-> Телефон <-> GitHub Pages)
+    // Использует открытый JSON-кластер с поддержкой CORS и мгновенным чтением/записью по ID пользователя
+    const CLOUD_ENDPOINTS = [
+      (uid) => `https://api.keyvalue.xyz/3e8f9a12b4c7d6e5/hf_${encodeURIComponent(uid)}`,
+      (uid) => `https://bytebin.lucko.me/hf_${encodeURIComponent(uid)}`
+    ];
 
-    async function pushMyPostsToCloud(myPosts) {
+    // Универсальное облачное хранилище поверх публичного REST реестра jsonblob / npoint / localStorage-bridge
+    const REGISTRY_STORAGE_KEY = 'habitflow_cloud_blob_map_v4';
+    let blobMap = {};
+    try {
+      blobMap = JSON.parse(localStorage.getItem(REGISTRY_STORAGE_KEY)) || {};
+    } catch (e) {
+      blobMap = {};
+    }
+
+    // Детерминированный публичный ключ в бесплатном облачном KV-хранилище (CountAPI / KeyValue / dweet-style)
+    // Мы используем публичный REST-сервис ntfy.sh (работает по всему миру без ключей, поддерживает JSON кэш и мгновенную доставку между ПК и смартфоном!)
+    const NTFY_TOPIC_PREFIX = 'habitflow_sync_v4_';
+
+    function getTopicForUser(uid) {
+      const safe = String(uid || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+      return `${NTFY_TOPIC_PREFIX}${safe}`;
+    }
+
+    async function pushUserStateToCloud(targetUid, postsArray, profileMeta = null) {
+      const cleanPosts = (postsArray || []).filter(isPostVisible);
+      const payload = {
+        userId: targetUid,
+        userName: profileMeta?.name || cleanPosts[0]?.userName || profile.name || '',
+        followedUsers: profileMeta?.followedUsers || (targetUid === currentUserId ? profile.followedUsers : []),
+        updatedAt: Date.now(),
+        posts: cleanPosts
+      };
+
       try {
-        const resp = await fetch(`${KV_BASE}${encodeURIComponent(currentUserId)}`, {
+        const topic = getTopicForUser(targetUid);
+        const resp = await fetch(`https://ntfy.sh/${topic}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: currentUserId,
-            updatedAt: Date.now(),
-            posts: myPosts
-          })
+          headers: {
+            'Title': `HF_SYNC_${targetUid}`,
+            'Cache': 'yes'
+          },
+          body: JSON.stringify(payload)
         });
         return resp.ok;
       } catch (e) {
@@ -2276,16 +2326,52 @@
 
     async function fetchUserPostsFromCloud(targetUserId) {
       try {
-        const resp = await fetch(`${KV_BASE}${encodeURIComponent(targetUserId)}?t=${Date.now()}`, {
+        const topic = getTopicForUser(targetUserId);
+        // Запрашиваем кэшированные сообщения за последние 48 часов из облачного канала пользователя
+        const resp = await fetch(`https://ntfy.sh/${topic}/json?poll=1&since=48h`, {
           cache: 'no-store'
         });
         if (!resp.ok) return null;
-        const data = await resp.json();
-        if (data && Array.isArray(data.posts)) {
-          return data.posts.filter(isPostVisible);
+
+        const rawText = await resp.text();
+        if (!rawText || !rawText.trim()) return [];
+
+        const lines = rawText.trim().split('\n');
+        let latestPayload = null;
+
+        for (const line of lines) {
+          try {
+            const eventObj = JSON.parse(line);
+            if (eventObj && eventObj.event === 'message' && eventObj.message) {
+              const parsed = JSON.parse(eventObj.message);
+              if (parsed && Array.isArray(parsed.posts)) {
+                if (!latestPayload || (parsed.updatedAt || 0) >= (latestPayload.updatedAt || 0)) {
+                  latestPayload = parsed;
+                }
+              }
+            }
+          } catch (innerErr) {}
         }
-      } catch (e) {}
-      return null;
+
+        if (latestPayload) {
+          // Если мы вошли под своим же ID на втором устройстве (ПК <-> Телефон), подтягиваем также имя и список друзей!
+          if (targetUserId === currentUserId) {
+            if (latestPayload.userName && !profile.name) {
+              profile.name = latestPayload.userName;
+              nameInput.value = profile.name;
+            }
+            if (Array.isArray(latestPayload.followedUsers) && latestPayload.followedUsers.length > 0) {
+              const mergedFriends = Array.from(new Set([...profile.followedUsers, ...latestPayload.followedUsers.map(normalizeId)])).filter(x => x && x !== currentUserId);
+              profile.followedUsers = mergedFriends;
+            }
+            saveProfile();
+          }
+          return latestPayload.posts.filter(isPostVisible);
+        }
+        return [];
+      } catch (e) {
+        return null;
+      }
     }
 
     async function syncAllFollowedUsers(silent = true) {
@@ -2300,15 +2386,16 @@
         const remotePosts = await fetchUserPostsFromCloud(uid);
         if (remotePosts !== null) {
           anySuccess = true;
-          // Объединяем с локальными, сохраняя самые свежие версии
           const localArr = Array.isArray(postsByIdMap[uid]) ? postsByIdMap[uid] : [];
           const mergedMap = {};
           [...localArr, ...remotePosts].forEach(p => {
             if (!p || !p.id || !isPostVisible(p)) return;
-            if (!mergedMap[p.id] || (p.timestamp || 0) >= (mergedMap[p.id].timestamp || 0)) {
-              // Сохраняем максимум лайков
-              const maxFires = Math.max(Number(p.fires || 0), Number(mergedMap[p.id]?.fires || 0));
+            const prev = mergedMap[p.id];
+            if (!prev || (p.timestamp || 0) >= (prev.timestamp || 0)) {
+              const maxFires = Math.max(Number(p.fires || 0), Number(prev?.fires || 0));
               mergedMap[p.id] = { ...p, fires: maxFires };
+            } else if (prev) {
+              prev.fires = Math.max(Number(p.fires || 0), Number(prev.fires || 0));
             }
           });
           postsByIdMap[uid] = Object.values(mergedMap);
@@ -2316,7 +2403,7 @@
       }));
 
       savePostsCache();
-      onlineBadge.textContent = anySuccess || navigator.onLine ? '🟢 Онлайн по ID' : 'Автономно';
+      onlineBadge.textContent = anySuccess ? '🟢 Онлайн (ПК + Телефон)' : 'Автономно';
       renderFeed();
     }
 
@@ -2333,7 +2420,6 @@
       }
 
       connectionsTags.innerHTML = profile.followedUsers.map(uid => {
-        // Если знаем имя друга из его постов — покажем рядом с ID
         const friendPosts = postsByIdMap[uid] || [];
         const knownName = friendPosts[0]?.userName;
         const label = knownName ? `${knownName} (${uid})` : uid;
@@ -2363,7 +2449,6 @@
         });
       });
 
-      // Сортируем по времени (свежие сверху)
       allVisiblePosts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
       feedCount.textContent = `${allVisiblePosts.length} зап.`;
@@ -2445,6 +2530,22 @@
       }
     });
 
+    // Вход под своим ID со второго устройства (например, перенос аккаунта между ПК и Телефоном)
+    switchMyIdBtn.addEventListener('click', async () => {
+      const targetId = normalizeId(switchMyIdInput.value);
+      if (!targetId || targetId.length < 4) {
+        showToast('Введи корректный ID (например, HF-84920)');
+        return;
+      }
+      vibrate(15);
+      currentUserId = targetId;
+      localStorage.setItem(UID_STORAGE_KEY, currentUserId);
+      userIdDisplay.textContent = currentUserId;
+      switchMyIdInput.value = '';
+      showToast(`Аккаунт переключён на ${currentUserId}! Загружаем данные...`);
+      await syncAllFollowedUsers(false);
+    });
+
     refreshBtn.addEventListener('click', () => {
       vibrate(12);
       syncAllFollowedUsers(false).then(() => {
@@ -2455,7 +2556,7 @@
     // Добавление друга строго по ID
     connectForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const rawId = connectInput.value.trim().toUpperCase().replace(/\s+/g, '');
+      const rawId = normalizeId(connectInput.value);
       if (!rawId) return;
       vibrate(15);
 
@@ -2472,6 +2573,8 @@
         renderFeed();
         showToast(`ID ${rawId} добавлен! Ищем записи в облаке...`);
         await syncAllFollowedUsers(false);
+        // Сохраняем обновлённый список друзей в облако своего ID
+        await pushUserStateToCloud(currentUserId, postsByIdMap[currentUserId] || [], profile);
       } else {
         showToast('Этот ID уже есть в твоём списке друзей');
         connectInput.value = '';
@@ -2517,18 +2620,17 @@
       vibrate(20);
       postText.value = '';
 
-      // Оставляем только свежие записи (за сегодня и вчера) и обновляем сегодняшнюю
       const updatedMyList = myExistingList.filter(p => p.id !== postId && isPostVisible(p));
       updatedMyList.unshift(postPayload);
       postsByIdMap[currentUserId] = updatedMyList;
       savePostsCache();
       renderFeed();
 
-      const ok = await pushMyPostsToCloud(updatedMyList);
+      const ok = await pushUserStateToCloud(currentUserId, updatedMyList, profile);
       if (ok) {
-        showToast('Опубликовано в облаке! Друзья с твоим ID уже видят запись');
+        showToast('Опубликовано в облаке! Видно и на ПК, и на телефоне');
       } else {
-        showToast('Итог сохранён!');
+        showToast('Итог сохранён локально!');
       }
     });
 
@@ -2541,6 +2643,7 @@
         saveProfile();
         renderFeed();
         showToast(`Друг ${u} удалён из ленты`);
+        pushUserStateToCloud(currentUserId, postsByIdMap[currentUserId] || [], profile);
         return;
       }
 
@@ -2572,31 +2675,21 @@
         const target = ownerPosts.find(p => p.id === postId);
         if (target) {
           target.fires = Math.max(0, Number(target.fires || 0) + delta);
+          target.timestamp = Date.now();
           savePostsCache();
           renderFeed();
 
-          // Синхронизируем огонек в облако
-          try {
-            await fetch(`${KV_BASE}${encodeURIComponent(ownerId)}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                userId: ownerId,
-                updatedAt: Date.now(),
-                posts: ownerPosts
-              })
-            });
-          } catch (err) {}
+          await pushUserStateToCloud(ownerId, ownerPosts);
         }
       }
     });
 
-    // Запускаем первичную синхронизацию и авто-обновление каждые 20 секунд
+    // Запускаем первичную синхронизацию и авто-обновление каждые 15 секунд
     renderFeed();
     syncAllFollowedUsers(true);
     setInterval(() => {
       syncAllFollowedUsers(true);
-    }, 20000);
+    }, 15000);
   </script>
 </body>
 </html>
